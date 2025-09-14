@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,11 +10,24 @@
   </head>
   <body>
     <h1>Weekly Attendance</h1>
+
+    <input type="date" id="meeting-date" name="meeting-date" />
+
     <form id="attendance-form">
-      <input type="text" id="name" placeholder="Name" required />
-      <button type="submit">Add</button>
+      <div id="member-list"></div>
     </form>
-    <ul id="attendance-list"></ul>
+
+    <hr />
+
+    <form id="add-member-form">
+      <input
+        type="text"
+        id="new-member-name"
+        placeholder="Add new member"
+        required
+      />
+      <button type="submit">Add Member</button>
+    </form>
 
     <script type="module" src="main.js"></script>
   </body>

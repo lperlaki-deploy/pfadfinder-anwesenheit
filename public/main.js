@@ -1,63 +1,212 @@
-import { addRecord, getAllRecords, getUnsyncedRecords, markAllSynced} from "./attendance.js";
+import {
+  addRxPlugin,
+  createRxDatabase,
+} from "https://esm.sh/rxdb/plugins/core";
+import { RxDBDevModePlugin } from "https://esm.sh/rxdb/plugins/dev-mode";
+import { getRxStorageLocalstorage } from "https://esm.sh/rxdb/plugins/storage-localstorage";
+import { wrappedValidateAjvStorage } from "https://esm.sh/rxdb/plugins/validate-ajv";
+import {
+  getConnectionHandlerSimplePeer,
+  replicateWebRTC,
+} from "https://esm.sh/rxdb/plugins/replication-webrtc";
+import {
+  combineLatestWith,
+  distinctUntilChanged,
+  fromEvent,
+  map,
+  startWith,
+} from "https://esm.sh/rxjs";
 
-const form = document.getElementById("attendance-form");
-const list = document.getElementById("attendance-list");
+addRxPlugin(RxDBDevModePlugin);
 
-async function renderList() {
-  const records = await getAllRecords();
-  list.innerHTML = records.map((r) =>
-    `<li>${r.name} - ${new Date(r.date).toLocaleString()}</li>`
-  ).join("");
+const memberList = document.getElementById("member-list");
+const addMemberForm = document.getElementById("add-member-form");
+const newMemberInput = document.getElementById("new-member-name");
+const meetingDate = document.getElementById("meeting-date");
+
+// Get today or next Monday
+function getNextMonday(date = new Date()) {
+  const day = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const offset = day === 1 ? 0 : (8 - day) % 7;
+  date.setDate(date.getDate() + offset);
+  return date;
 }
 
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const name = document.getElementById("name").value.trim();
-  if (name) {
-    await addRecord(name, false);
-    document.getElementById("name").value = "";
-    renderList();
+// Set default value
+meetingDate.value = getNextMonday().toISOString().split("T")[0];
 
-    if ("serviceWorker" in navigator && "SyncManager" in window) {
-      const reg = await navigator.serviceWorker.ready;
-      await reg.sync.register("attendance-sync");
-    } else {
-      await syncAttendanceFallback();
-    }
+// Prevent non-Mondays
+meetingDate.addEventListener("input", () => {
+  const selected = new Date(meetingDate.value);
+  if (selected.getDay() !== 1) {
+    meetingDate.value = getNextMonday(selected).toISOString().split("T")[0];
   }
 });
 
-
-addEventListener('online', () => {
-  syncAttendanceFallback();
+const db = await createRxDatabase({
+  name: "attendance",
+  storage: wrappedValidateAjvStorage({
+    storage: getRxStorageLocalstorage(),
+  }),
 });
 
-async function syncAttendanceFallback() {
-  const unsynced = await getUnsyncedRecords();
-  if (unsynced.length > 0) {
-    try {
-      await fetch('/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(unsynced)
-      });
-      await markAllSynced();
-    } catch (err) {
-      console.error('Fallback sync failed:', err);
-    }
-  }
-}
+await db.addCollections({
+  // name of the collection
+  members: {
+    // we use the JSON-schema standard
+    schema: {
+      version: 0,
+      primaryKey: "name",
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          maxLength: 100, // <- the primary key must have maxLength
+        },
+        fullname: {
+          type: "string",
+        },
+      },
+      required: ["name"],
+    },
+  },
+  attendance: {
+    // we use the JSON-schema standard
+    schema: {
+      version: 0,
+      primaryKey: {
+        // where should the composed string be stored
+        key: "id",
+        // fields that will be used to create the composed key
+        fields: [
+          "date",
+          "member",
+        ],
+        // separator which is used to concat the fields values.
+        separator: "|",
+      },
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          maxLength: 100, // <- the primary key must have maxLength
+        },
+        member: {
+          ref: "members",
+          type: "string",
+        },
+        date: {
+          type: "string",
+          format: "date-time",
+        },
+        attended: {
+          type: "boolean",
+          default: false,
+        },
+        comment: {
+          type: "string",
+          default: "",
+        },
+      },
+      required: ["member", "date"],
+    },
+  },
+});
 
+const membersPool = await replicateWebRTC({
+  collection: db.members,
+  connectionHandlerCreator: getConnectionHandlerSimplePeer({
+    signalingServerUrl: "/signaling",
+  }),
+  topic: "pfadfinder-members", // <- set any app-specific room id here.
+  secret: "mysecret",
+  pull: {},
+  push: {},
+});
 
-if ("serviceWorker" in navigator) {
-  if (!('SyncManager' in window)) {
-    syncAttendanceFallback();
-  }
-  addEventListener("DOMContentLoaded", (_event) => {
-    navigator.serviceWorker.register("/sw.js")
-      .then((reg) => console.log("SW registered", reg))
-      .catch((err) => console.error("SW registration failed", err));
+membersPool.error$.subscribe((err) => console.error("WebRTC Error:", err));
+
+const attendancePool = await replicateWebRTC({
+  collection: db.attendance,
+  connectionHandlerCreator: getConnectionHandlerSimplePeer({
+    signalingServerUrl: "/signaling",
+  }),
+  topic: "pfadfinder-attendance", // <- set any app-specific room id here.
+  secret: "mysecret",
+  pull: {},
+  push: {},
+});
+
+attendancePool.error$.subscribe((err) => console.error("WebRTC Error:", err));
+
+const selected_date$ = fromEvent(
+  meetingDate,
+  "change",
+  (e) => new Date(e.target.value),
+).pipe(
+  startWith(getNextMonday()),
+  map((d) => {
+    d.setUTCHours(0, 0, 0, 0);
+    return d;
+  }),
+  map((d) => d.toISOString()),
+  distinctUntilChanged(),
+);
+
+function bindCheckbox(doc, field, checkbox) {
+  doc.get$(field).subscribe((val) => checkbox.checked = !!val);
+  checkbox.addEventListener("change", async () => {
+    await doc.incrementalPatch({ [field]: checkbox.checked });
   });
 }
 
-renderList();
+function bindInput(doc, field, input) {
+  doc.get$(field).subscribe((val) => input.value = val);
+  input.addEventListener("input", async () => {
+    await doc.incrementalPatch({ [field]: input.value });
+  });
+}
+
+const memberList$ = db.members.find().$;
+
+memberList$.pipe(combineLatestWith(selected_date$)).subscribe(
+  async ([members, today]) => {
+    memberList.innerHTML = "";
+
+    for (const member of members) {
+      const member_attendance = await db.attendance.insertIfNotExists({
+        member: member.name,
+        date: today,
+      });
+
+      const wrapper = document.createElement("div");
+
+      const checkbox = document.createElement("input");
+
+      const qualityInput = document.createElement("input");
+
+      checkbox.type = "checkbox";
+      bindCheckbox(member_attendance, "attended", checkbox);
+
+      const label = document.createElement("label");
+      label.textContent = member.name;
+      label.append(checkbox);
+
+      qualityInput.type = "text";
+      qualityInput.placeholder = "Komentar";
+      bindInput(member_attendance, "comment", qualityInput);
+
+      wrapper.appendChild(label);
+      wrapper.appendChild(qualityInput);
+      memberList.appendChild(wrapper);
+    }
+  },
+);
+
+addMemberForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = newMemberInput.value.trim();
+  if (name) {
+    await db.members.insert({ name });
+  }
+});
