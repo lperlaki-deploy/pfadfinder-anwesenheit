@@ -11,7 +11,8 @@
     "jsr:@std/media-types@^1.1.0": "1.1.0",
     "jsr:@std/net@^1.0.4": "1.0.4",
     "jsr:@std/path@^1.1.1": "1.1.1",
-    "jsr:@std/streams@^1.0.10": "1.0.10"
+    "jsr:@std/streams@^1.0.10": "1.0.10",
+    "npm:@types/node@*": "24.2.0"
   },
   "jsr": {
     "@std/cli@1.0.20": {
@@ -61,6 +62,31 @@
     "@std/streams@1.0.10": {
       "integrity": "75c0b1431873cd0d8b3d679015220204d36d3c7420d93b60acfc379eb0dc30af"
     }
+  },
+  "npm": {
+    "@types/node@24.2.0": {
+      "integrity": "sha512-3xyG3pMCq3oYCNg7/ZP+E1ooTaGB4cG8JWRsqqOYQdbWNY4zbaV0Ennrd7stjiJEFZCaybcIgpTjJWHRfBSIDw==",
+      "dependencies": [
+        "undici-types"
+      ]
+    },
+    "undici-types@7.10.0": {
+      "integrity": "sha512-t5Fy/nfn+14LuOc2KNYg75vZqClpAiqscVvMygNnlsHBFpSXdJaYtXMcdNLpl/Qvc3P2cB3s6lOV51nqsFq4ag=="
+    }
+  },
+  "redirects": {
+    "https://esm.sh/@types/papaparse@~5.3.15/index.d.ts": "https://esm.sh/@types/papaparse@5.3.16/index.d.ts",
+    "https://esm.sh/@types/papaparse@~5.3.16/index.d.ts": "https://esm.sh/@types/papaparse@5.3.16/index.d.ts"
+  },
+  "remote": {
+    "https://esm.sh/idb@8.0.0": "099def3f75a44c5eaa3db9937935a060f4bb36d8ad7616c95f26a013424b371e",
+    "https://esm.sh/idb@8.0.0/denonext/idb.mjs": "6722527522b28a3a4daba7a6f896b9fc91607c121cbe3e7043a88e5213f5f6a5",
+    "https://esm.sh/papaparse@5.4.1": "219ba0c48cb54e9dff897b36f769042c63a965083bcde16e0a06e11fbd22c185",
+    "https://esm.sh/papaparse@5.4.1/denonext/papaparse.mjs": "6fe398c5882dd70175d388f39e25200bf9e54395eeb5fa96dd6640ca8e1806ee",
+    "https://esm.sh/papaparse@5.5.1": "35d2936b926b2b20e8808c23eefb4eb604c24aac3cf0c252066e7ff7d7358775",
+    "https://esm.sh/papaparse@5.5.1/denonext/papaparse.mjs": "f731d66e88473118efa8187f26d03d97ca1209b048550ec93669e0a66add532f",
+    "https://esm.sh/papaparse@5.5.3": "410ff5dc7e8c14dde326f505eff4c3bf576e57889653e5c265d60de95aa56255",
+    "https://esm.sh/papaparse@5.5.3/denonext/papaparse.mjs": "2bd4460afed36f867979452bf1a9c2d5c0830a9d6cb85590fd41613f871d0e80"
   },
   "workspace": {
     "dependencies": [
